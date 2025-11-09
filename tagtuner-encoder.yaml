@@ -45,7 +45,7 @@ esphome:
   name: $name
   name_add_mac_suffix: False
   project:
-    name: Bergtveit.Tagreader
+    name: Stubbslie.TagTuner
     version: dev
   on_boot:
     priority: -10
