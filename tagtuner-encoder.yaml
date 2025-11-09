@@ -1,0 +1,657 @@
+# yaml-language-server: $schema=
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${name}
+    password: !secret fallback_password
+
+captive_portal:
+
+improv_serial:
+
+substitutions:
+  name: tagreader_ossisen
+  friendly_name: TagReader Ossisen
+  # Home Assistant media_player entity to control volume on
+  # Set this to the Home Assistant media_player entity you want to control.
+  # Example: media_player.living_room_sonos
+  media_player_entity: media_player.beam
+  # Encoder pins
+  encoder_pin_a: GPIO18
+  encoder_pin_b: GPIO16
+  encoder_button_pin: GPIO17
+  # Volume step per encoder 'click' (0.0 - 1.0)
+  volume_step: '0.005'
+  # PN532 SPI interface pins
+  spi_clk_pin: GPIO12
+  spi_mosi_pin: GPIO11
+  spi_miso_pin: GPIO13
+  # PN532 CS pin
+  spi_cs_pin: GPIO05
+  # Activity LED pin
+  light_pin: GPIO2
+  led_brightness: '30%'
+  # Max volume limit
+  max_volume: '0.7'
+
+esp32:
+ variant: esp32s3
+ board: lolin_s3_mini
+ framework:
+   type: esp-idf
+
+esphome:
+  name: $name
+  name_add_mac_suffix: False
+  project:
+    name: Bergtveit.Tagreader
+    version: dev
+  on_boot:
+    priority: -10
+    then:
+      - wait_until:
+          api.connected:
+      - logger.log: API is connected!
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - switch.turn_on: led_enabled
+
+globals:
+  - id: source
+    type: std::string
+  - id: url
+    type: std::string
+  - id: info
+    type: std::string
+  - id: read_success
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+    # Store the tag UID
+  - id: tag_uid
+    type: std::string
+  # Current volume (0.0 - 1.0). Restored on boot.
+  - id: volume_level
+    type: float
+    restore_value: yes
+    initial_value: '0.20'
+  - id: last_played_url
+    type: std::string
+    restore_value: yes
+    initial_value: ''
+  - id: last_played_info
+    type: std::string
+    restore_value: yes
+    initial_value: ''
+
+script:
+  - id: volume_up
+    then:
+      - lambda: |-
+            // increase and clamp
+            id(volume_level) += ${volume_step};
+            if (id(volume_level) > ${max_volume}) id(volume_level) = ${max_volume};
+      - homeassistant.service:
+          service: media_player.volume_set
+          data:
+            entity_id: ${media_player_entity}
+            volume_level: !lambda |-
+              return id(volume_level);
+      - sensor.template.publish:
+          id: ha_volume_level_sensor
+          state: !lambda 'return id(volume_level);'
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 100%
+          blue: 0%
+          flash_length: 100ms
+      - text_sensor.template.publish:
+          id: tagtune_status
+          state: "volume up"
+  - id: volume_down
+    then:
+      - lambda: |-
+            // decrease and clamp
+            id(volume_level) -= ${volume_step};
+            if (id(volume_level) < 0.0) id(volume_level) = 0.0;
+      - homeassistant.service:
+          service: media_player.volume_set
+          data:
+            entity_id: ${media_player_entity}
+            volume_level: !lambda |-
+              return id(volume_level);
+      - sensor.template.publish:
+          id: ha_volume_level_sensor
+          state: !lambda 'return id(volume_level);'
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 100%
+          green: 0%
+          blue: 0%
+          flash_length: 100ms
+      - text_sensor.template.publish:
+          id: tagtune_status
+          state: "volume down"
+  - id: tripple_click
+    then:
+      - homeassistant.service:
+          service: media_player.media_previous_track
+          data:
+            entity_id: ${media_player_entity}
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - delay: 500ms
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - delay: 500ms
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - text_sensor.template.publish:
+          id: tagtune_status
+          state: "previous track"
+  - id: double_click
+    then:
+      - homeassistant.service:
+          service: media_player.media_next_track
+          data:
+            entity_id: ${media_player_entity}
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - delay: 500ms
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - text_sensor.template.publish:
+          id: tagtune_status
+          state: "next track"
+  - id: single_click
+    then:
+      - homeassistant.service:
+          service: media_player.media_play_pause
+          data:
+            entity_id: ${media_player_entity}
+      - light.turn_on:
+          id: activity_led
+          brightness: ${led_brightness}
+          red: 0%
+          green: 0%
+          blue: 100%
+          flash_length: 500ms
+      - text_sensor.template.publish:
+          id: tagtune_status
+          state: "play/pause"
+  - id: long_click
+    then:
+    - light.turn_on:
+        id: activity_led
+        brightness: ${led_brightness}
+        red: 0%
+        green: 0%
+        blue: 100%
+        flash_length: 1000ms
+    - text_sensor.template.publish:
+        id: tagtune_status
+        state: "clickLong"
+    - if:
+        condition:
+          lambda: 'return id(last_played_url) != "";'
+        then:
+          - logger.log: 
+              format: "Long press - restarting %s"
+              args: ['id(last_played_info).c_str()']
+          - homeassistant.service:
+              service: media_player.play_media
+              data:
+                entity_id: ${media_player_entity}
+                media_content_type: music
+                media_content_id: !lambda |-
+                  return id(last_played_url);
+        else:
+          - logger.log: "Long press - no URL to restart"
+  - id: handle_tag_removed
+    then:
+      - logger.log:
+          format: "Tag removed - pausing: %s"
+          args: ['id(last_played_info).c_str()']
+      - homeassistant.service:
+          service: media_player.media_pause
+          data:
+            entity_id: ${media_player_entity}
+      - binary_sensor.template.publish:
+          id: tag_present
+          state: false
+      - homeassistant.event:
+          event: esphome.tag_removed
+      - light.turn_off:
+          id: activity_led
+          transition_length: 0ms
+  - id: handle_tag_read
+    then:
+      - if:
+          condition:
+            lambda: 'return id(read_success);'
+          then:
+          - light.turn_on:
+              id: activity_led
+              brightness: ${led_brightness}
+              red: 0%
+              green: 100%
+              blue: 0%
+          else:
+          - light.turn_on:
+              id: activity_led
+              brightness: ${led_brightness}
+              red: 100%
+              green: 0%
+              blue: 0%
+              flash_length: 500ms
+      - if:
+          condition:
+            lambda: 'return ( id(source)=="uid" || id(source)=="error" );'
+          then:
+            - homeassistant.tag_scanned: !lambda |-
+                ESP_LOGD("tagreader", "No HA NDEF, using UID");
+                return id(tag_uid); // Use the stored UID;
+          else:
+          - if:
+              condition:
+                lambda: 'return ( id(source)=="file" );'
+              then:
+              - homeassistant.event:
+                  event: esphome.print_tag
+                  data:
+                    reader: !lambda |-
+                      return App.get_name().c_str();
+                    source: !lambda |-
+                      return id(source);
+                    url: !lambda |-
+                      return id(url).erase(0,7); // erasing 'file://'
+                    info: !lambda |-
+                      return id(info);
+              else:
+              - if:
+                  condition:
+                      lambda: 'return ( id(source)=="color" );'
+                  then:
+                  - homeassistant.event:
+                      event: esphome.color_tag
+                      data:
+                        reader: !lambda |-
+                          return App.get_name().c_str();
+                        source: !lambda |-
+                          return id(source);
+                        url: !lambda |-
+                          return id(url).erase(0,8); // erasing 'color://'
+                        info: !lambda |-
+                          return id(info);
+                  else:
+                    - homeassistant.event:
+                        event: esphome.music_tag
+                        data:
+                          reader: !lambda |-
+                            return App.get_name().c_str();
+                          source: !lambda |-
+                            return id(source);
+                          url: !lambda |-
+                            return id(url);
+                          info: !lambda |-
+                            return id(info);
+                    - if:
+                          condition:
+                            lambda: 'return id(url) != id(last_played_url);'
+                          then:
+                            - logger.log: 
+                                format: "New tag detected - playing: %s" 
+                                args: ['id(info).c_str()']
+                            - homeassistant.service:
+                                service: media_player.play_media
+                                data:
+                                  entity_id: ${media_player_entity}
+                                  media_content_type: music
+                                  media_content_id: !lambda |-
+                                    return id(url);
+                            - lambda: |-
+                                id(last_played_url) = id(url);
+                                id(last_played_info) = id(info);
+                          else:
+                            - logger.log: 
+                                format: "Same tag detected - resuming playback of: %s" 
+                                args: ['id(info).c_str()']
+                            - homeassistant.service:
+                                service: media_player.media_play
+                                data:
+                                  entity_id: ${media_player_entity}
+
+switch:
+  - platform: template
+    name: "${friendly_name} LED Enabled"
+    id: led_enabled
+    icon: mdi:alarm-light-outline
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+button:
+  - platform: template
+    name: Cancel writing
+    id: cancel_writing
+    icon: mdi:pencil-off
+    on_press:
+      then:
+        - lambda: 'id(pn532_board).read_mode();'
+        - light.turn_off:
+            id: activity_led
+
+  - platform: restart
+    name: "${friendly_name} Restart"
+    entity_category: config
+
+logger:
+
+api:
+  services:
+  - service: write_music_tag
+    variables:
+      music_url: string
+      music_info: string
+    then:
+    - light.turn_on:
+        id: activity_led
+        brightness: ${led_brightness}
+        red: 100%
+        green: 0%
+        blue: 0%
+    - lambda: |-
+        auto message = new nfc::NdefMessage();
+        std::string uri = "";
+        std::string text = "";
+        uri += music_url;
+        text += music_info;
+
+        // Strip ? and everything after
+        size_t pos = uri.find('?');
+        if (pos != std::string::npos) {
+          uri = uri.substr(0, pos);
+        }
+    
+        if ( uri != "" ) {
+          message->add_uri_record(uri);
+        }
+        if ( text != "" ) {
+          message->add_text_record(text);
+        }
+        id(pn532_board).write_mode(message);
+    - wait_until:
+        not:
+          pn532.is_writing:
+    - light.turn_off:
+        id: activity_led
+
+  - service: write_printing_tag
+    variables:
+      filename: string
+      file_info: string
+    then:
+    - light.turn_on:
+        id: activity_led
+        brightness: ${led_brightness}
+        red: 100%
+        green: 0%
+        blue: 0%
+    - lambda: |-
+        auto message = new nfc::NdefMessage();
+        std::string uri = "file://";
+        std::string text = "";
+        uri += filename;
+        text += file_info;
+        if ( filename != "" ) {
+          message->add_uri_record(uri);
+        }
+        if ( file_info != "" ) {
+          message->add_text_record(text);
+        }
+        id(pn532_board).write_mode(message);
+    - wait_until:
+        not:
+          pn532.is_writing:
+    - light.turn_off:
+        id: activity_led
+
+  - service: write_color_tag
+    variables:
+      color_code: string
+      color_name: string
+    then:
+    - light.turn_on:
+        id: activity_led
+        brightness: ${led_brightness}
+        red: 100%
+        green: 0%
+        blue: 0%
+    - lambda: |-
+        auto message = new nfc::NdefMessage();
+        std::string uri = "color://";
+        std::string text = "";
+        uri += color_code;
+        text += color_name;
+        if ( color_code != "" ) {
+          message->add_uri_record(uri);
+        }
+        if ( text != "" ) {
+          message->add_text_record(text);
+        }
+        id(pn532_board).write_mode(message);
+        ESP_LOGI("tagwriter", "Writing color tag: %s (%s)", uri.c_str(), text.c_str());
+        id(pn532_board).write_mode(message);
+    - wait_until:
+        not:
+          pn532.is_writing:
+    - light.turn_off:
+        id: activity_led
+
+ota:
+  - platform: esphome
+
+spi:
+  clk_pin: $spi_clk_pin
+  miso_pin: $spi_miso_pin
+  mosi_pin: $spi_mosi_pin
+
+pn532_spi:
+  cs_pin: $spi_cs_pin
+  id: pn532_board
+  update_interval: 200ms
+  on_tag:
+    then:
+      #- delay: 0.15s #to fix slow component
+      - binary_sensor.template.publish:
+          id: tag_present
+          state: true
+      - lambda: |-
+          id(read_success) = false;
+          id(source)="uid";
+          id(url)="";
+          id(info)="";
+          id(tag_uid) = x; // Store UID in global variable
+          if (tag.has_ndef_message()) {
+            auto message = tag.get_ndef_message();
+            auto records = message->get_records();
+            const char *applemusic_prefix="https://music.apple.com";
+            const char *spotify_prefix="https://open.spotify.com";
+            const char *sonos_prefix="sonos-2://";
+            const char *printfile_prefix="file://";
+            const char *colortag_prefix="color://";
+            for (auto &record : records) {
+              auto &payload = record->get_payload();
+              auto &type = record->get_type();
+
+              if (type == "U"){
+                id(url)=payload;
+                id(read_success) = true;
+                if (payload.compare(0, strlen(applemusic_prefix), applemusic_prefix)==0){
+                  ESP_LOGD("tagreader", "Found Apple Music tag NDEF");
+                  id(source)="amusic";
+                }
+                else if (payload.compare(0, strlen(spotify_prefix), spotify_prefix)==0){
+                  ESP_LOGD("tagreader", "Found Spotify tag NDEF");
+                  id(source)="spotify";
+                }
+                else if (payload.compare(0, strlen(sonos_prefix), sonos_prefix)==0){
+                  ESP_LOGD("tagreader", "Found Sonos app tag NDEF");
+                  id(source)="sonos";
+                }
+                else if (payload.compare(0, strlen(printfile_prefix), printfile_prefix)==0){
+                  ESP_LOGD("tagreader", "Found print tag NDEF");
+                  id(source)="file";
+                }
+                else if (payload.compare(0, strlen(colortag_prefix), colortag_prefix)==0){
+                  ESP_LOGD("tagreader", "Found color tag NDEF");
+                  id(source)="color";
+                  }
+              }
+              else if (type == "T" ) {
+                ESP_LOGD("tagreader", "Found info tag NDEF");
+                id(info)=payload;
+              }
+            }
+          }
+          else {
+            id(source)="error";
+          }
+      - script.execute: handle_tag_read
+  on_tag_removed:
+    then:
+      - script.execute: handle_tag_removed
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} Status"
+    entity_category: diagnostic
+  # Presence of an NFC tag
+  - platform: template
+    name: "Tag Present"
+    id: tag_present
+    device_class: occupancy
+    icon: mdi:nfc
+  # Encoder button - toggles play/pause when pressed
+  - platform: gpio
+    name: "Encoder Button"
+    id: encoder_button
+    pin:
+      number: $encoder_button_pin
+      mode: INPUT_PULLUP
+      inverted: true
+    on_multi_click:
+    - timing:
+        - ON for at most 1s
+        - OFF for at most 0.25s
+        - ON for at most 1s
+        - OFF for at most 0.25s
+        - ON for at most 1s
+      then:
+        script.execute: tripple_click
+    - timing:
+        - ON for at most 1s
+        - OFF for at most 0.25s
+        - ON for at most 1s
+        - OFF for at least 0.25s
+      then:
+        - script.execute: double_click
+    - timing:
+        - ON for 0.5s to 2s
+        - OFF for at least 50ms
+      then:
+        - script.execute: long_click
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at least 260ms
+      then:
+        - script.execute: single_click
+
+text_sensor:
+  - platform: version
+    hide_timestamp: true
+    name: "${friendly_name} ESPHome Version"
+    entity_category: diagnostic
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+      icon: mdi:wifi
+      entity_category: diagnostic
+    ssid:
+      name: "${friendly_name} Connected SSID"
+      icon: mdi:wifi-strength-2
+      entity_category: diagnostic
+  - platform: template
+    id: tagtune_status
+    name: "Status"
+    icon: mdi:ladybug
+    entity_category: DIAGNOSTIC
+
+light:
+  - platform: esp32_rmt_led_strip
+    chipset: ws2812
+    pin: $light_pin
+    num_leds: 1
+    flash_transition_length: 200ms
+    rgb_order: GRB
+    id: activity_led
+    name: "${friendly_name} LED"
+    restore_mode: ALWAYS_OFF
+
+# Expose current volume as a sensor in Home Assistant
+sensor:
+  - platform: template
+    name: "${friendly_name} Volume Level"
+    id: ha_volume_level_sensor
+    unit_of_measurement: ""
+    accuracy_decimals: 2
+    icon: mdi:volume-high
+    lambda: |-
+      return (float)id(volume_level);
+  - platform: rotary_encoder
+    name: "${friendly_name} Volume Encoder"
+    id: volume_encoder
+    pin_a: $encoder_pin_a
+    pin_b: $encoder_pin_b
+    resolution: 4
+    # on clockwise / anticlockwise we update a stored volume_level and call Home Assistant
+    on_clockwise:
+      then:
+        - script.execute: volume_up
+    on_anticlockwise:
+      then:
+        - script.execute: volume_down
