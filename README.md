@@ -1,19 +1,14 @@
 # ESPhome Tagreader/writer
-This project is heavily based on adonno's and luka6000's work, check it out: https://github.com/adonno/tagreader and https://github.com/luka6000/TagTuner
+This project is a for of larcster's repo and relies heavily on adonno's and luka6000's work, check it out: https://github.com/adonno/tagreader and https://github.com/luka6000/TagTuner
 
-This repo includes two separate versions of the tagtuner/tagreader, one with an added rotary encoder with button and one without.
-Both version extends on the original versions by allowing for more custom "tag types" (ie. file printing tags, color tags, ect). 
-The version with the encoder doesn't rely on any automation in order to play music, as the ESP handles all the service calls by itself.
-
-The version with an encoder uses substitutions and scripts in a more extensive way than that without.
-
-It is still compatible with this blueprint: https://gist.github.com/luka6000/ec6406e44de3dff082dd7e22cedcff93
+Both version extends on larcster's versions by adding an encoder with button functionallity (play/pause, next, previous and restart playlist) 
+It also removes the need for an automation in home assistant for music playback, as the ESP handles all the service calls on it's own.
+The version also uses substitutions and scripts in a more extensive way than larcster's version.
 
 # Hardware
 * Wemos Lolin S3 Mini
 * PN532 NFC Reader
 * WS2812 LED
-* <u>Optional </u>
 * EC11 Rotary Encoder
 
 # Wiring
@@ -34,7 +29,7 @@ For the LED:
 | GND     | GND               | Again, can be connected on an available GND on the P532, but the lolin has two pins for GND       |
 | Din     | GPIO2             |                                                                                                   |
 
-For the optional encoder:
+For the encoder:
 | Encoder Pin | Lolin S3 Mini Pin | Notes                     |
 |-------------|-------------------|---------------------------|
 | S1          | GPIO18            |                           |
@@ -45,7 +40,6 @@ For the optional encoder:
 
 # Building
 Either install ESPhome on your computer or build directly in Home Assistant's ESPhome Device Builder. Remember to modify secrets.yaml according to your network.
-
 
 # Installation
 You might need to hold in the "boot" button while connecting with USB to the computer for flashing. This is not necessary when doing OTA updates.
