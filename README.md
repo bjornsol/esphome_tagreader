@@ -1,5 +1,5 @@
 # ESPhome TagTuner/writer
-This project is a for of [larcster's repo](https://github.com/larcster/esphome_tagreader) and relies heavily on the work by [adonno](https://github.com/adonno/tagreader) and [luka6000](https://github.com/luka6000/TagTuner)
+This project is a fork of [larcster's repo](https://github.com/larcster/esphome_tagreader) and relies heavily on the work by [adonno](https://github.com/adonno/tagreader) and [luka6000](https://github.com/luka6000/TagTuner)
 
 This version extends on larcster's versions by adding an encoder with button functionallity (play/pause, next, previous and restart playlist) 
 It also removes the need for an automation in home assistant for music playback, as the ESP handles all the service calls on it's own.
