@@ -45,6 +45,6 @@ substitutions:
 
 # Include required and optional packages
 packages:
-  tagtuner: !include github://Stubbslie/TagTuner/esphome/esphome_tagreader/packages/tagtuner.yaml@main
+  tagtuner: !include github://bjornsol/esphome_tagtuner/packages/tagtuner.yaml@main
   # ONLY INCLUDE IF USING ENCODER ------------------|
-  encoder: !include github://Stubbslie/TagTuner/esphome/esphome_tagreader/packages/encoder.yaml@main
+  encoder: !include github://bjornsol/esphome_tagtuner/packages/encoder.yaml@main
