@@ -39,10 +39,15 @@ For the encoder:
 | GND         | GND               |                           |
 
 # Building
-Either install ESPhome on your computer or build directly in Home Assistant's ESPhome Device Builder. Remember to modify secrets.yaml according to your network.
+Either install ESPHome on your computer or build directly in Home Assistant's ESPHome Device Builder. 
+Copy and paste only the "device_yaml.yaml", rename file to the desire entity name and configure variables.
+The packages will be pulled directly from the repo by ESPHome.
+Remember to modify secrets.yaml according to your network.
 
 # Installation
-You might need to hold in the "boot" button while connecting with USB to the computer for flashing. This is not necessary when doing OTA updates.
+I've had issues when trying the initial install from within Home Assistant's ESPHome Device builder, I kept getting a unexpected device type error.
+Doing the initial install from the ESPHome CLI fixed the issue and further OTA updates worked from Home Assistant.
+During the initial install you will probably need to hold in the "boot" button while connecting with USB to the computer for flashing. 
 
 
 
